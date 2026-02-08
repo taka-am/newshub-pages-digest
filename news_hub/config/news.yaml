@@ -32,7 +32,7 @@ topic_packs:
         REIT: ["REIT","リート","不動産"]
 
   world_general:
-    enabled: false
+    enabled: true
     sources:
       - type: rss
         id: example_general
