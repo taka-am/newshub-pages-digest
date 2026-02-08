@@ -116,17 +116,22 @@ def main():
         pack = cfg_news["topic_packs"][pack_name]
         rules = pack.get("rules", {})
         tag_keywords = rules.get("tag_keywords", {})
+        deny_keywords = rules.get("deny_keywords", []) or []
 
         for src in pack.get("sources", []):
             st = {"name": src.get("name"), "type": src.get("type"), "ok": True, "error": ""}
             try:
                 if src["type"] == "rss":
+                    base_importance = int(src.get("base_importance", 3))
                     feed = fetch_rss(src["url"])
                     for e in feed.entries[:50]:
                         published = safe_text(getattr(e, "published", "") or getattr(e, "updated", ""))
                         title = safe_text(getattr(e, "title", ""))
                         url = safe_text(getattr(e, "link", ""))
                         summary = safe_text(getattr(e, "summary", ""))
+                        joined = title + " " + summary
+                        if any(k in joined for k in deny_keywords):
+                            continue
                         tags = tag_from_keywords(title, summary, tag_keywords)
                         all_items.append({
                             "id": f"{pack_name}:{src.get('id')}:{url}",
@@ -137,7 +142,7 @@ def main():
                             "published_at": published,
                             "summary_short": (summary[:180] if summary else title),
                             "tags": tags,
-                            "importance": 3,
+                            "importance": base_importance,
                             "impact": "unclear",
                             "llm_mode": cfg_llm.get("llm", {}).get("mode", "manual_preferred"),
                             "llm_draft": False,

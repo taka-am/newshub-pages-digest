@@ -38,14 +38,26 @@ topic_packs:
         id: zaikei_society
         name: "財経新聞(政治・社会)"
         url: "https://zaikei.co.jp/rss/sections/society.xml"
+        base_importance: 4
       - type: rss
         id: zaikei_it
         name: "財経新聞(IT・サイエンス)"
         url: "https://zaikei.co.jp/rss/sections/it.xml"
+        base_importance: 4
       - type: rss
         id: zaikei_main
         name: "財経新聞(主要記事)"
         url: "https://zaikei.co.jp/rss/main.xml"
+        base_importance: 3
     rules:
       priority_order: [market_important]
       max_items_per_section: 30
+      deny_keywords:
+        - "エンタメ"
+        - "芸能"
+        - "アイドル"
+        - "韓流"
+        - "ドラマ"
+        - "映画"
+        - "結婚"
+        - "熱愛"
