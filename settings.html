@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>設定 | NewsHub</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; margin:0; background:#0b1220; color:#e8eefc;}
+    header{position:sticky; top:0; background:#0b1220; border-bottom:1px solid #1f2a44; padding:12px 14px; z-index:10;}
+    .tabs a{color:#a9c1ff; text-decoration:none; margin-right:12px; font-weight:600;}
+    .wrap{max-width:820px; margin:0 auto; padding:14px;}
+    .card{background:#111a2e; border:1px solid #1f2a44; border-radius:12px; padding:12px; margin:10px 0;}
+    .meta{font-size:12px; color:#b3c2e6; display:flex; gap:10px; flex-wrap:wrap;}
+    .title{font-size:15px; font-weight:700; margin:6px 0;}
+    .summary{font-size:13px; color:#d8e3ff; line-height:1.45;}
+    .badge{font-size:11px; padding:2px 8px; border-radius:999px; border:1px solid #2a3b63; background:#0f1830;}
+    .imp{background:#1b2a4b;}
+    a.link{color:#8dd3ff;}
+    footer{color:#8ea7e6; font-size:12px; padding:20px 14px; border-top:1px solid #1f2a44;}
+    .muted{color:#8ea7e6;}
+  </style>
+</head>
+<body>
+<header>
+  <div class="tabs">
+    <a href="./index.html">今日</a>
+    <a href="./investing.html">投資</a>
+    <a href="./general.html">一般</a>
+    <a href="./log.html">ログ</a>
+    <a href="./settings.html">設定</a>
+  </div>
+  <div class="muted">NewsHub Pages Digest（公開: 一般情報のみ / B'はスイッチ）</div>
+</header>
+
+<div class="wrap">
+  <h2>設定 / 状態</h2>
+<div class="card">
+  <div class="meta">
+    <span class="badge">最終実行: 2026-02-09 07:50:07 JST</span>
+    <span class="badge">最終成功: 2026-02-09 07:50:07 JST</span>
+    <span class="badge">公開方針: A（一般情報） + B'スイッチ</span>
+  </div>
+  <div class="summary">GitHub Pages の制限（サイトサイズ1GB、帯域100GB/月、デプロイ10分など）に注意しつつ、軽量な静的HTMLを生成します。</div>
+</div>
+<div class="card">
+  <div class="meta"><span class="badge imp">B'（資産クラス比率）</span></div>
+  <div class="summary">show_asset_mix: <b>False</b>（デフォルトOFF） / 5%刻みで表示（総資産や個別情報は出しません）</div>
+</div>
+<div class="card">
+  <div class="meta"><span class="badge">ソース稼働</span></div>
+  <div class='summary'>[OK] JPX マーケットニュース (rss)</div><div class='summary'>[OK] JPXからのお知らせ (rss)</div><div class='summary'>[NG] EDINET（法定開示） (edinet) - EDINET_API_KEY not set (skipped)</div>
+</div>
+
+</div>
+
+<footer>
+  <div>生成: 2026-02-09 07:50:07 JST / 根拠リンク中心（転載なし）</div>
+</footer>
+</body>
+</html>
