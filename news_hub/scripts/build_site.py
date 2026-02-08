@@ -29,8 +29,7 @@ def now_jst():
 
 
 def safe_text(x):
-    return (x or "").replace("
-", " ").strip()
+    return (x or "").replace("\n", " ").strip()
 
 
 def fetch_rss(url: str, timeout=20):
@@ -92,8 +91,7 @@ def build_card(it: dict) -> str:
 
 
 def build_cards(items):
-    return "
-".join(build_card(it) for it in items)
+    return "\n".join(build_card(it) for it in items)
 
 
 def main():
