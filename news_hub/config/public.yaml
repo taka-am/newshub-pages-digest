@@ -1,0 +1,10 @@
+public_site:
+  show_asset_mix: false
+  asset_mix_rounding: 0.05
+  asset_mix:
+    # equity: 0.70
+    # bond: 0.15
+    # reit: 0.15
+    # cash: 0.00
+  show_total_assets: false
+  show_specific_holdings: false

@@ -1,0 +1,11 @@
+<h2>投資向けダイジェスト</h2>
+<div class="card">
+  <div class="meta">
+    <span class="badge imp">優先: 関連 → 市場 → 開示</span>
+    <span class="badge">LLM: {{ llm_mode }}</span>
+    <span class="badge">手動滞留: {{ manual_stale_days }}日でfree_apiへ</span>
+  </div>
+  <div class="summary">ニュースは売買判断の参考情報として、関連度と重要度で並べ替えます。深掘りは手動優先（忙しいときは無料APIで暫定生成）。</div>
+</div>
+{{ asset_mix_block }}
+{{ sections }}

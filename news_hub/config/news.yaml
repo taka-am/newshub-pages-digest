@@ -1,0 +1,43 @@
+# NewsHub Pages Digest - news sources
+# 投資向け(investing_jp)と、汎用ニュース(world_general等)を「Topic Pack」として追加できます。
+
+topic_packs:
+  investing_jp:
+    enabled: true
+    sources:
+      - type: rss
+        id: jpx_markets_news
+        name: "JPX マーケットニュース"
+        url: "https://www.jpx.co.jp/rss/markets_news.xml"
+
+      - type: rss
+        id: jpx_news_release
+        name: "JPXからのお知らせ"
+        url: "https://www.jpx.co.jp/rss/jpx-news.xml"
+
+      - type: edinet
+        id: edinet_daily
+        name: "EDINET（法定開示）"
+        endpoint: "https://api.edinet-fsa.go.jp/api/v2/documents.json"
+        include_doc_type_codes: ["120","140","160","350"]
+
+    rules:
+      priority_order: [portfolio_related, watchlist_related, market_important, filings]
+      max_items_per_section: 20
+      tag_keywords:
+        決算: ["決算","短信","業績","決算説明","決算発表","有価証券報告書","四半期報告書"]
+        株主還元: ["配当","増配","自社株","自己株","還元"]
+        金利: ["金利","利回り","国債","利上げ","利下げ"]
+        為替: ["円高","円安","為替","ドル","ユーロ"]
+        REIT: ["REIT","リート","不動産"]
+
+  world_general:
+    enabled: false
+    sources:
+      - type: rss
+        id: example_general
+        name: "(例) 一般ニュースRSS"
+        url: "https://example.com/rss.xml"
+    rules:
+      priority_order: [market_important]
+      max_items_per_section: 20

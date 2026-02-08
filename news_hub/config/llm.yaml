@@ -1,0 +1,17 @@
+llm:
+  mode: manual_preferred
+  manual_stale_days: 3
+  fallback_mode: free_api
+  tasks:
+    news_brief:
+      default: free_api
+      fallback: manual
+    news_deep:
+      default: manual
+      fallback: free_api
+
+providers:
+  free_api:
+    kind: local_llama_or_free_api
+  manual:
+    kind: any_chat

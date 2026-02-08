@@ -1,0 +1,17 @@
+<h2>設定 / 状態</h2>
+<div class="card">
+  <div class="meta">
+    <span class="badge">最終実行: {{ last_run }}</span>
+    <span class="badge">最終成功: {{ last_success }}</span>
+    <span class="badge">公開方針: A（一般情報） + B'スイッチ</span>
+  </div>
+  <div class="summary">GitHub Pages の制限（サイトサイズ1GB、帯域100GB/月、デプロイ10分など）に注意しつつ、軽量な静的HTMLを生成します。</div>
+</div>
+<div class="card">
+  <div class="meta"><span class="badge imp">B'（資産クラス比率）</span></div>
+  <div class="summary">show_asset_mix: <b>{{ show_asset_mix }}</b>（デフォルトOFF） / 5%刻みで表示（総資産や個別情報は出しません）</div>
+</div>
+<div class="card">
+  <div class="meta"><span class="badge">ソース稼働</span></div>
+  {{ sources_status }}
+</div>
