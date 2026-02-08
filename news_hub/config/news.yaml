@@ -35,9 +35,17 @@ topic_packs:
     enabled: true
     sources:
       - type: rss
-        id: example_general
-        name: "(例) 一般ニュースRSS"
-        url: "https://example.com/rss.xml"
+        id: zaikei_society
+        name: "財経新聞(政治・社会)"
+        url: "https://zaikei.co.jp/rss/sections/society.xml"
+      - type: rss
+        id: zaikei_it
+        name: "財経新聞(IT・サイエンス)"
+        url: "https://zaikei.co.jp/rss/sections/it.xml"
+      - type: rss
+        id: zaikei_main
+        name: "財経新聞(主要記事)"
+        url: "https://zaikei.co.jp/rss/main.xml"
     rules:
       priority_order: [market_important]
-      max_items_per_section: 20
+      max_items_per_section: 30
