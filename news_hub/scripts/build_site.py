@@ -169,21 +169,39 @@ def clean_title_for_digest(title: str) -> str:
     t = re.sub(r"\s+", " ", t)
     return t
 
+def clean_summary_for_digest(summary: str) -> str:
+    s = (summary or "").strip()
+    s = re.sub(r"\s+", " ", s)
+    return s
+
 def make_digest_block(label: str, items: list, max_lines: int = 6) -> str:
     # 最新（published_ts）順の上位を使う
     sorted_items = sorted(items, key=lambda x: int(x.get('published_ts', 0)), reverse=True)
     lines = []
+    seen_urls = set()
     for it in sorted_items:
+        url = it.get("url", "")
+        if url and url in seen_urls:
+            continue
+        if url:
+            seen_urls.add(url)
         title = clean_title_for_digest(it.get('title',''))
+        summ = clean_summary_for_digest(it.get("summary_short", ""))
         if not title:
             continue
-        # 重複っぽいものを避ける
-        if title in lines:
-            continue
-        # 長すぎるのは省略
-        if len(title) > 80:
-            title = title[:77] + '…'
-        lines.append(title)
+        if not summ or summ == title:
+            line = title
+        else:
+            max_total = 120
+            if len(title) > 60:
+                title = title[:57] + "..."
+            remain = max_total - (len(title) + 3)
+            if remain < 20:
+                remain = 20
+            if len(summ) > remain:
+                summ = summ[:max(0, remain - 1)] + "..."
+            line = f"{title} - {summ}"
+        lines.append(line)
         if len(lines) >= max_lines:
             break
 
