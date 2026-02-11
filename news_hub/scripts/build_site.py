@@ -1,10 +1,11 @@
-
 import os
 import json
 import csv
 import datetime
+import time
 from pathlib import Path
 from dateutil import tz
+from dateutil import parser as dateparser
 import requests
 import feedparser
 import yaml
@@ -18,32 +19,26 @@ TEMPLATE_DIR = NEWS_DIR / "templates"
 
 JST = tz.gettz("Asia/Tokyo")
 
-
 def load_yaml(p: Path):
     with p.open("r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
-
 def now_jst():
     return datetime.datetime.now(tz=JST)
 
-
 def safe_text(x):
     return (x or "").replace("\n", " ").strip()
-
 
 def fetch_rss(url: str, timeout=20):
     r = requests.get(url, timeout=timeout)
     r.raise_for_status()
     return feedparser.parse(r.text)
 
-
 def fetch_edinet_daily(endpoint: str, api_key: str, date_str: str):
     params = {"date": date_str, "type": 2, "Subscription-Key": api_key}
     r = requests.get(endpoint, params=params, timeout=30)
     r.raise_for_status()
     return r.json()
-
 
 def tag_from_keywords(title: str, summary: str, tag_keywords: dict):
     text = (title + " " + summary)
@@ -55,13 +50,33 @@ def tag_from_keywords(title: str, summary: str, tag_keywords: dict):
                 break
     return tags
 
+def entry_timestamp(e) -> int:
+    """feedparser entry から日時を数値化（新しい順ソート用）"""
+    t = getattr(e, "published_parsed", None) or getattr(e, "updated_parsed", None)
+    if t:
+        try:
+            return int(time.mktime(t))
+        except Exception:
+            pass
+    return 0
+
+def iso_timestamp(s: str) -> int:
+    """EDINET submitDateTime (ISO風) を数値化"""
+    if not s:
+        return 0
+    try:
+        dt = dateparser.parse(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=JST)
+        return int(dt.timestamp())
+    except Exception:
+        return 0
 
 def render(template_name: str, ctx: dict):
     tpl = (TEMPLATE_DIR / template_name).read_text(encoding="utf-8")
     for k, v in ctx.items():
         tpl = tpl.replace("{{ " + k + " }}", str(v))
     return tpl
-
 
 def wrap_base(title: str, subtitle: str, content_html: str, generated_at: str):
     base = (TEMPLATE_DIR / "base.html").read_text(encoding="utf-8")
@@ -70,7 +85,6 @@ def wrap_base(title: str, subtitle: str, content_html: str, generated_at: str):
     base = base.replace("{{ content }}", content_html)
     base = base.replace("{{ generated_at }}", generated_at)
     return base
-
 
 def build_card(it: dict) -> str:
     tags = ", ".join(it.get("tags", []))
@@ -89,10 +103,30 @@ def build_card(it: dict) -> str:
         "</div>"
     )
 
-
 def build_cards(items):
     return "\n".join(build_card(it) for it in items)
 
+def dedupe_by_url(items):
+    """同一URLの重複除去"""
+    seen = set()
+    out = []
+    for it in items:
+        u = it.get("url", "")
+        if not u:
+            continue
+        if u in seen:
+            continue
+        seen.add(u)
+        out.append(it)
+    return out
+
+def sort_newest(items):
+    """重要度が高い→新しい（published_tsが大きい）順"""
+    return sorted(
+        items,
+        key=lambda x: (-(int(x.get("importance", 3))), -(int(x.get("published_ts", 0)))),
+        reverse=False,
+    )
 
 def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -112,11 +146,13 @@ def main():
     all_items = []
     sources_status_lines = []
 
+    # 収集
     for pack_name in enabled_packs:
         pack = cfg_news["topic_packs"][pack_name]
         rules = pack.get("rules", {})
-        tag_keywords = rules.get("tag_keywords", {})
+
         deny_keywords = rules.get("deny_keywords", []) or []
+        allow_keywords = rules.get("allow_keywords", []) or []
 
         for src in pack.get("sources", []):
             st = {"name": src.get("name"), "type": src.get("type"), "ok": True, "error": ""}
@@ -129,10 +165,16 @@ def main():
                         title = safe_text(getattr(e, "title", ""))
                         url = safe_text(getattr(e, "link", ""))
                         summary = safe_text(getattr(e, "summary", ""))
+
                         joined = title + " " + summary
-                        if any(k in joined for k in deny_keywords):
+                        allow_hit = any(k in joined for k in allow_keywords)
+                        deny_hit = any(k in joined for k in deny_keywords)
+                        if deny_hit and not allow_hit:
                             continue
-                        tags = tag_from_keywords(title, summary, tag_keywords)
+
+                        published_ts = entry_timestamp(e)
+                        tags = tag_from_keywords(title, summary, rules.get("tag_keywords", {}))
+
                         all_items.append({
                             "id": f"{pack_name}:{src.get('id')}:{url}",
                             "topic_pack": pack_name,
@@ -140,6 +182,7 @@ def main():
                             "title": title,
                             "url": url,
                             "published_at": published,
+                            "published_ts": published_ts,
                             "summary_short": (summary[:180] if summary else title),
                             "tags": tags,
                             "importance": base_importance,
@@ -166,8 +209,10 @@ def main():
                             filer = safe_text(r.get("filerName"))
                             sec = safe_text(r.get("secCode"))
                             doc_id = safe_text(r.get("docID"))
-                            url = f"https://disclosure.edinet-fsa.go.jp/api/v2/documents/{doc_id}?type=2" if doc_id else ""
                             published = safe_text(r.get("submitDateTime"))
+                            published_ts = iso_timestamp(published)
+                            url = f"https://disclosure.edinet-fsa.go.jp/api/v2/documents/{doc_id}?type=2" if doc_id else ""
+
                             all_items.append({
                                 "id": f"{pack_name}:{src.get('id')}:{doc_id}",
                                 "topic_pack": pack_name,
@@ -175,6 +220,7 @@ def main():
                                 "title": (f"{filer} {title}" if filer else title),
                                 "url": url,
                                 "published_at": published,
+                                "published_ts": published_ts,
                                 "summary_short": (f"EDINET提出: {title} / 証券コード: {sec}" if sec else f"EDINET提出: {title}"),
                                 "tags": ["法定開示"],
                                 "importance": 4,
@@ -193,10 +239,18 @@ def main():
 
             sources_status_lines.append(st)
 
-    # sort by importance desc, then published_at desc (rough)
-    all_items.sort(key=lambda x: (-(int(x.get("importance", 3))), x.get("published_at", "")), reverse=False)
-    top_items = all_items[:30]
+    items_by_pack = {}
+    for it in all_items:
+        items_by_pack.setdefault(it.get("topic_pack", "unknown"), []).append(it)
 
+    inv_items = sort_newest(dedupe_by_url(items_by_pack.get("investing_jp", [])))
+    gen_items = sort_newest(dedupe_by_url(items_by_pack.get("world_general", [])))
+
+    index_sections = build_cards(inv_items[:10] + gen_items[:10])
+    inv_sections = build_cards(inv_items[:30])
+    gen_sections = build_cards(gen_items[:50])
+
+    # B'（資産クラス比率）
     pub = cfg_pub.get("public_site", {})
     asset_mix_block = ""
     if pub.get("show_asset_mix"):
@@ -221,27 +275,30 @@ def main():
                 "<div class='summary'>public.yaml の asset_mix に equity/bond/reit/cash を設定してください</div></div>"
             )
 
-    sections_html = build_cards(top_items)
     subtitle = "NewsHub Pages Digest（公開: 一般情報のみ / B'はスイッチ）"
 
-    index_inner = render("page_index.html", {"enabled_packs": ", ".join(enabled_packs), "sections": sections_html})
+    # index
+    index_inner = render("page_index.html", {"enabled_packs": ", ".join(enabled_packs), "sections": index_sections})
     (OUT_DIR / "index.html").write_text(wrap_base("今日 | NewsHub", subtitle, index_inner, run_at_str), encoding="utf-8")
 
+    # investing
     inv_inner = render(
         "page_investing.html",
         {
             "llm_mode": cfg_llm.get("llm", {}).get("mode", "manual_preferred"),
             "manual_stale_days": str(cfg_llm.get("llm", {}).get("manual_stale_days", 3)),
             "asset_mix_block": asset_mix_block,
-            "sections": sections_html,
+            "sections": inv_sections,
         },
     )
     (OUT_DIR / "investing.html").write_text(wrap_base("投資 | NewsHub", subtitle, inv_inner, run_at_str), encoding="utf-8")
 
-    gen_inner = render("page_general.html", {"sections": ""})
+    # general
+    gen_inner = render("page_general.html", {"sections": gen_sections})
     (OUT_DIR / "general.html").write_text(wrap_base("一般 | NewsHub", subtitle, gen_inner, run_at_str), encoding="utf-8")
 
-    # append to csv log (dedupe)
+    # log
+    all_sorted = sort_newest(dedupe_by_url(all_items))
     log_path = DATA_DIR / "news_log.csv"
     existing_ids = set()
     if log_path.exists():
@@ -252,30 +309,18 @@ def main():
 
     with log_path.open("a", encoding="utf-8", newline="") as f:
         writer = csv.writer(f)
-        for it in top_items:
+        for it in all_sorted[:80]:
             if it["id"] in existing_ids:
                 continue
-            writer.writerow(
-                [
-                    it["id"],
-                    it["topic_pack"],
-                    it["source"],
-                    it["title"],
-                    it["url"],
-                    it["published_at"],
-                    it["summary_short"],
-                    " ".join(it["tags"]),
-                    it["importance"],
-                    it["impact"],
-                    it["llm_mode"],
-                    it["llm_draft"],
-                    it["llm_confidence"],
-                ]
-            )
+            writer.writerow([
+                it["id"], it["topic_pack"], it["source"], it["title"], it["url"], it["published_at"],
+                it["summary_short"], " ".join(it["tags"]), it["importance"], it["impact"],
+                it["llm_mode"], it["llm_draft"], it["llm_confidence"],
+            ])
 
     # log page
     rows_html = ""
-    for it in top_items[:50]:
+    for it in all_sorted[:80]:
         rows_html += (
             "<div class='card'>"
             f"<div class='meta'><span class='badge'>{it.get('topic_pack')}</span><span class='badge'>{safe_text(it.get('published_at'))}</span></div>"
@@ -287,7 +332,7 @@ def main():
     log_inner = render("page_log.html", {"rows": rows_html})
     (OUT_DIR / "log.html").write_text(wrap_base("ログ | NewsHub", subtitle, log_inner, run_at_str), encoding="utf-8")
 
-    # settings page
+    # settings
     sources_html = ""
     for s in sources_status_lines:
         status = "OK" if s.get("ok") else "NG"
