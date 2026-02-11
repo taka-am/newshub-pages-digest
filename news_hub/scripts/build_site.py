@@ -3,6 +3,7 @@ import json
 import csv
 import datetime
 import time
+import re
 from pathlib import Path
 from dateutil import tz
 from dateutil import parser as dateparser
@@ -59,6 +60,38 @@ def entry_timestamp(e) -> int:
         except Exception:
             pass
     return 0
+
+def parse_timestamp_fallback(published_str: str, now_dt: datetime.datetime) -> int:
+    """published_at の文字列から timestamp を推定（RSSがparsed日時を持たない場合の救済）。
+
+    主に以下のパターンに対応：
+    - '11/09 17:49'（年が無い） -> 現在年を基本に、未来日付になる場合は前年に補正
+    - ISO/一般パース可能な文字列 -> dateutilでパース
+    """
+    s = (published_str or "").strip()
+    if not s:
+        return 0
+
+    m = re.search(r"(?P<m>\d{1,2})/(?P<d>\d{1,2})\s+(?P<h>\d{1,2}):(?P<mi>\d{2})", s)
+    if m:
+        mon = int(m.group('m'))
+        day = int(m.group('d'))
+        hh = int(m.group('h'))
+        mi = int(m.group('mi'))
+        year = now_dt.year
+        dt = datetime.datetime(year, mon, day, hh, mi, tzinfo=JST)
+        # 未来日付に見える場合は前年に倒す（年跨ぎ対策）
+        if dt > now_dt + datetime.timedelta(days=1):
+            dt = datetime.datetime(year - 1, mon, day, hh, mi, tzinfo=JST)
+        return int(dt.timestamp())
+
+    try:
+        dt = dateparser.parse(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=JST)
+        return int(dt.timestamp())
+    except Exception:
+        return 0
 
 def iso_timestamp(s: str) -> int:
     """EDINET submitDateTime (ISO風) を数値化"""
@@ -128,6 +161,50 @@ def sort_newest(items):
         reverse=False,
     )
 
+def clean_title_for_digest(title: str) -> str:
+    t = (title or "").strip()
+    # 先頭の [xxx] を落とす
+    t = re.sub(r"^\[[^\]]+\]\s*", "", t)
+    # 余計な空白
+    t = re.sub(r"\s+", " ", t)
+    return t
+
+def make_digest_block(label: str, items: list, max_lines: int = 6) -> str:
+    # 最新（published_ts）順の上位を使う
+    sorted_items = sorted(items, key=lambda x: int(x.get('published_ts', 0)), reverse=True)
+    lines = []
+    for it in sorted_items:
+        title = clean_title_for_digest(it.get('title',''))
+        if not title:
+            continue
+        # 重複っぽいものを避ける
+        if title in lines:
+            continue
+        # 長すぎるのは省略
+        if len(title) > 80:
+            title = title[:77] + '…'
+        lines.append(title)
+        if len(lines) >= max_lines:
+            break
+
+    if not lines:
+        return (
+            "<div class='card'>"
+            f"<div class='meta'><span class='badge imp'>今日の要約（{label}）</span></div>"
+            "<div class='summary'>（該当ニュースなし）</div>"
+            "</div>"
+        )
+
+    lis = "".join([f"<li>{safe_text(x)}</li>" for x in lines])
+    return (
+        "<div class='card'>"
+        f"<div class='meta'><span class='badge imp'>今日の要約（{label}）</span></div>"
+        "<div class='summary'><ul style='margin:6px 0 0 18px;padding:0'>"
+        f"{lis}"
+        "</ul></div>"
+        "</div>"
+    )
+
 def main():
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -173,6 +250,9 @@ def main():
                             continue
 
                         published_ts = entry_timestamp(e)
+                        if published_ts == 0:
+                            published_ts = parse_timestamp_fallback(published, run_at)
+
                         tags = tag_from_keywords(title, summary, rules.get("tag_keywords", {}))
 
                         all_items.append({
@@ -246,7 +326,11 @@ def main():
     inv_items = sort_newest(dedupe_by_url(items_by_pack.get("investing_jp", [])))
     gen_items = sort_newest(dedupe_by_url(items_by_pack.get("world_general", [])))
 
-    index_sections = build_cards(inv_items[:10] + gen_items[:10])
+    # Index: 要約（投資/一般） + ハイライト
+    digest_investing = make_digest_block("投資", inv_items)
+    digest_general = make_digest_block("一般", gen_items)
+
+    index_sections = digest_investing + digest_general + build_cards(inv_items[:10] + gen_items[:10])
     inv_sections = build_cards(inv_items[:30])
     gen_sections = build_cards(gen_items[:50])
 
@@ -332,12 +416,22 @@ def main():
     log_inner = render("page_log.html", {"rows": rows_html})
     (OUT_DIR / "log.html").write_text(wrap_base("ログ | NewsHub", subtitle, log_inner, run_at_str), encoding="utf-8")
 
-    # settings
+    # settings: count + newest info for debugging
+    def newest_info(items):
+        if not items:
+            return "-"
+        it = max(items, key=lambda x: int(x.get('published_ts', 0)))
+        return f"{safe_text(it.get('published_at'))} / {safe_text(it.get('title'))[:60]}"
+
     sources_html = ""
     for s in sources_status_lines:
         status = "OK" if s.get("ok") else "NG"
         err = safe_text(s.get("error"))
         sources_html += f"<div class='summary'>[{status}] {safe_text(s.get('name'))} ({safe_text(s.get('type'))}){(' - ' + err) if err else ''}</div>"
+
+    sources_html += "<div class='summary' style='margin-top:10px'><b>統計</b></div>"
+    sources_html += f"<div class='summary'>investing_jp 件数: {len(inv_items)} / 最新: {safe_text(newest_info(inv_items))}</div>"
+    sources_html += f"<div class='summary'>world_general 件数: {len(gen_items)} / 最新: {safe_text(newest_info(gen_items))}</div>"
 
     st_inner = render(
         "page_settings.html",
